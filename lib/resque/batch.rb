@@ -54,9 +54,7 @@ module Resque
         if msg
           decoded_msg = Resque.decode(msg)
           job_id = decoded_msg["id"].to_i
-          batch_jobs[job_id].status = decoded_msg["status"]
-          batch_jobs[job_id].msg = decoded_msg["msg"]
-          batch_jobs[job_id].exception = decoded_msg["exception"]
+          batch_jobs[job_id].process_job_msg(decoded_msg)
 
           last_activity_check = Time.now
 
