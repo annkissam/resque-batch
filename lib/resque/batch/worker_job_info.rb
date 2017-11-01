@@ -26,6 +26,11 @@ module Resque
         redis.rpush(batch_key, Resque.encode(id: job_id, status: 'exception', exception: exception))
       end
 
+      def heartbeat!
+        redis.set(heartbeat_key, "running")
+        redis.expire(heartbeat_key, Resque::Batch::JOB_HEARTBEAT_TTL)
+      end
+
       private
 
       def redis
@@ -34,6 +39,10 @@ module Resque
 
       def batch_key
         "batch:#{batch_id}"
+      end
+
+      def heartbeat_key
+        "batch:#{batch_id}:heartbeat:#{job_id}"
       end
     end
   end

@@ -10,7 +10,18 @@ module Resque
 
       module ClassMethods
         def perform(batch_id, job_id, *params)
+          heartbeat_thread = nil
+
           worker_job_info = Resque::Batch::WorkerJobInfo.new(batch_id, job_id)
+
+          worker_job_info.heartbeat!
+
+          heartbeat_thread = Thread.new do
+            loop do
+              sleep(Resque::Batch::JOB_HEARTBEAT)
+              worker_job_info.heartbeat!
+            end
+          end
 
           begin
             worker_job_info.begin!
@@ -21,7 +32,14 @@ module Resque
           rescue StandardError => exception
             worker_job_info.exception!(exception)
 
-            raise exception
+            # TODO: Is this correct?
+            if Resque.inline
+              raise exception
+            end
+          end
+        ensure
+          if heartbeat_thread
+            heartbeat_thread.exit
           end
         end
       end
