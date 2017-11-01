@@ -19,13 +19,13 @@ And then execute:
 
 ### Create a Batch Worker
 
-* include 'Resque::Batch::Worker'
+* include 'Resque::Batch::Job'
 * the method is perform_job (not perform)
 * You should return `success, message`
 
 ```
 class Archive
-  include Resque::Batch::Worker
+  include Resque::Batch::Job
 
   def self.perform_job(repo_id, branch = 'master')
     repo = Repository.find(repo_id)
