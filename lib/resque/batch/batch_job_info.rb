@@ -1,5 +1,7 @@
 module Resque
   class Batch
+    # A batch uses this file to store the state of each job.
+    # As messages are received (through redis) they're used to update this data.
     class BatchJobInfo
       attr_reader :klass,
                   :args

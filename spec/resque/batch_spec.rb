@@ -40,8 +40,8 @@ RSpec.describe Resque::Batch do
     expect(Resque::Batch::VERSION).not_to be nil
   end
 
-  it "works" do
-    batch = Resque::Batch.new(1)
+  it "works (with a block)" do
+    batch = Resque::Batch.new()
     batch.enqueue(Job, 11)
     batch.enqueue(Job, 12, "test2")
 
@@ -94,6 +94,9 @@ RSpec.describe Resque::Batch do
         else
           raise "SPEC FAILURE"
         end
+      when :exit
+        expect(batch_jobs[0].status).to eq("success")
+        expect(batch_jobs[1].status).to eq("success")
       else
         raise "Unknown message #{msg}"
       end
@@ -108,5 +111,41 @@ RSpec.describe Resque::Batch do
       [11, "test"],
       [12, "test2"],
     ])
+  end
+
+  it "works (without a block)" do
+    batch = Resque::Batch.new()
+    batch.enqueue(Job, 11)
+    batch.enqueue(Job, 12, "test2")
+
+    expect(Resque.size(:batch)).to eq(0)
+    expect(Resque::Stat[:processed]).to eq(0)
+    expect(Resque::Stat[:failed]).to eq(0)
+    expect(Job.processed_jobs).to eq([
+    ])
+
+    t = Thread.new {
+      loop do
+        if Resque.size(:batch) > 0
+          process_job(:batch)
+        else
+          sleep(0.1)
+        end
+      end
+    }
+
+    result = batch.perform
+
+    expect(result).to be_truthy
+
+    expect(Resque.size(:batch)).to eq(0)
+    expect(Resque::Stat[:processed]).to eq(2)
+    expect(Resque::Stat[:failed]).to eq(0)
+    expect(Job.processed_jobs).to eq([
+      [11, "test"],
+      [12, "test2"],
+    ])
+
+    t.exit
   end
 end

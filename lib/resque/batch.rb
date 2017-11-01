@@ -10,8 +10,8 @@ module Resque
     attr_reader :id,
                 :batch_jobs
 
-    def initialize(id)
-      @id = id
+    def initialize(id = nil)
+      @id = id || get_id
       @batch_jobs = []
     end
 
@@ -20,11 +20,12 @@ module Resque
     end
 
     def perform(&block)
-      result = redis.multi do
-        # TODO: This should be atomic and raise and error if it's not empty
-        # Make sure the incoming message queue is clear
-        redis.del(batch_key)
+      # Make sure the incoming message queue is clear
+      if redis.llen(batch_key) > 0
+        raise "redis list #{batch_key} is not empty"
+      end
 
+      result = redis.multi do
         batch_jobs.each_with_index do |bath_job, job_id|
           klass = bath_job.klass
           args = bath_job.args
@@ -33,22 +34,30 @@ module Resque
         end
       end
 
-      # TODO: Test the responst of multi
-      # raise "Error" unless result[0] == "OK"
+      unless result.last == job_count
+        raise "not all jobs were queued"
+      end
 
-      block.call(batch_jobs, :init, nil)
+      block.call(batch_jobs, :init, nil) if block
 
       while(batch_jobs.any?(&:incomplete?)) do
-        _queue, msg = redis.blpop(batch_key)
+        msg = redis.lpop(batch_key)
 
-        decoded_msg = Resque.decode(msg)
-        job_id = decoded_msg["id"].to_i
-        batch_jobs[job_id].status = decoded_msg["status"]
-        batch_jobs[job_id].msg = decoded_msg["msg"]
-        batch_jobs[job_id].exception = decoded_msg["exception"]
+        if msg
+          decoded_msg = Resque.decode(msg)
+          job_id = decoded_msg["id"].to_i
+          batch_jobs[job_id].status = decoded_msg["status"]
+          batch_jobs[job_id].msg = decoded_msg["msg"]
+          batch_jobs[job_id].exception = decoded_msg["exception"]
 
-        block.call(batch_jobs, :status, decoded_msg)
+          block.call(batch_jobs, :status, decoded_msg) if block
+        else
+          # TODO: How long should this sleep? Any feedback or timeout?
+          sleep(1)
+        end
       end
+
+      block.call(batch_jobs, :exit, nil) if block
 
       # Cleanup
       redis.del(batch_key)
@@ -72,6 +81,13 @@ module Resque
 
     def batch_key
       "batch:#{id}"
+    end
+
+    # https://redis.io/commands/incr
+    # An atomic counter
+    # Used to identify the response list (batch_key)
+    def get_id
+      redis.incr("batch:id")
     end
 
   end
