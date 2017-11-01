@@ -1,4 +1,4 @@
 ---
 timeout: 1800
 ruby_version: ruby-2.4.1
-bundler_version: 1.16
+bundler_version: 1.16.0
