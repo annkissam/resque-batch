@@ -1,4 +1,4 @@
-# Resque::Batch
+# Resque - Batch
 
 A plugin for Resque that allow for batched jobs. It provides two components: a batch and a wrapper around a normal Resque job. The wrapper handles communicating to the batch through a redis list, providing status updates as the jobs are processed. This allow the main program to call 'perform' on a batch, and wait for results that are processed by multiple resque workers.
 
@@ -19,13 +19,13 @@ And then execute:
 
 ### Create a Batch Worker
 
-* include 'Resque::Batch::Job'
+* include 'Resque::Plugins::Batch::Job'
 * the method is perform_job (not perform)
 * You should return `success, message`
 
 ```
 class Archive
-  include Resque::Batch::Job
+  include Resque::Plugins::Batch::Job
 
   def self.perform_job(repo_id, branch = 'master')
     repo = Repository.find(repo_id)
@@ -41,7 +41,7 @@ end
 You can wait for the result:
 
 ```
-batch = Resque::Batch.new()
+batch = Resque::Plugins::Batch.new()
 batch.enqueue(Job, 11)
 batch.enqueue(Job, 12, "test2")
 result = batch.perform

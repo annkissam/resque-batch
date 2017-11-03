@@ -1,7 +1,7 @@
 require "spec_helper"
 
 class Job
-  include Resque::Batch::Job
+  include Resque::Plugins::Batch::Job
 
   def self.perform_work(id, data = "test")
     @processed_jobs << [id, data]
@@ -26,7 +26,7 @@ class Job
 end
 
 class LongJob
-  include Resque::Batch::Job
+  include Resque::Plugins::Batch::Job
 
   def self.perform_work
     sleep(60)
@@ -42,7 +42,7 @@ def process_job(queue = :batch)
   worker.work_one_job
 end
 
-RSpec.describe Resque::Batch do
+RSpec.describe Resque::Plugins::Batch do
   before do
     Job.reset_jobs
 
@@ -53,7 +53,7 @@ RSpec.describe Resque::Batch do
   end
 
   it "has a version number" do
-    expect(Resque::Batch::VERSION).not_to be nil
+    expect(Resque::Plugins::Batch::VERSION).not_to be nil
   end
 
   context "Resque.inline == false" do
@@ -62,7 +62,7 @@ RSpec.describe Resque::Batch do
     end
 
     it "works (with a block)" do
-      batch = Resque::Batch.new()
+      batch = Resque::Plugins::Batch.new()
       batch.enqueue(Job, 11)
       batch.enqueue(Job, 12, "test2")
 
@@ -154,7 +154,7 @@ RSpec.describe Resque::Batch do
           end
         }
 
-        batch = Resque::Batch.new()
+        batch = Resque::Plugins::Batch.new()
         batch.enqueue(Job, 11)
         batch.enqueue(Job, 12, "test2")
 
@@ -192,7 +192,7 @@ RSpec.describe Resque::Batch do
     end
 
     it "works (with a block)" do
-      batch = Resque::Batch.new()
+      batch = Resque::Plugins::Batch.new()
       batch.enqueue(Job, 11)
       batch.enqueue(Job, 12, "test2")
 
@@ -280,7 +280,7 @@ RSpec.describe Resque::Batch do
           end
         }
 
-        batch = Resque::Batch.new()
+        batch = Resque::Plugins::Batch.new()
         batch.enqueue(Job, 11)
         batch.enqueue(Job, 12, "test2")
 
@@ -305,7 +305,7 @@ RSpec.describe Resque::Batch do
 
   context "idle_callback_timeout" do
     it "send an idle message (with a block)" do
-      batch = Resque::Batch.new()
+      batch = Resque::Plugins::Batch.new()
       batch.enqueue(LongJob)
 
       expect {
@@ -319,7 +319,7 @@ RSpec.describe Resque::Batch do
     end
 
     it "raise an idle exception (without a block)" do
-      batch = Resque::Batch.new()
+      batch = Resque::Plugins::Batch.new()
       batch.enqueue(LongJob)
 
       expect {
@@ -330,8 +330,8 @@ RSpec.describe Resque::Batch do
 
   context "heartbeat" do
     before do
-      stub_const("Resque::Batch::JOB_HEARTBEAT", 1)
-      stub_const("Resque::Batch::JOB_HEARTBEAT_TTL", 2)
+      stub_const("Resque::Plugins::Batch::JOB_HEARTBEAT", 1)
+      stub_const("Resque::Plugins::Batch::JOB_HEARTBEAT_TTL", 2)
     end
 
     it "raises 'a job died' exception" do
@@ -342,7 +342,7 @@ RSpec.describe Resque::Batch do
           end
         end
 
-        batch = Resque::Batch.new()
+        batch = Resque::Plugins::Batch.new()
         batch.enqueue(LongJob)
 
         expect {
@@ -373,7 +373,7 @@ RSpec.describe Resque::Batch do
           end
         end
 
-        batch = Resque::Batch.new()
+        batch = Resque::Plugins::Batch.new()
         batch.enqueue(Job, 11)
         batch.enqueue(Job, 12, "ERROR")
         batch.enqueue(Job, 13)
@@ -418,7 +418,7 @@ RSpec.describe Resque::Batch do
           end
         end
 
-        batch = Resque::Batch.new()
+        batch = Resque::Plugins::Batch.new()
         batch.enqueue(Job, 11)
         batch.enqueue(Job, 12, "EXCEPTION")
         batch.enqueue(Job, 13)
