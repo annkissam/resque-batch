@@ -9,23 +9,28 @@ module Resque
         attr_accessor :init_handler,
                       :exit_handler,
                       :idle_handler,
-                      :job_handler
-                      # :job_start_handler,
-                      # :job_stop_handler,
-                      # :job_info_handler,
-                      # :job_exception_handler
+                      :info_handler,
+                      :job_handler,
+                      :job_begin_handler,
+                      :job_success_handler,
+                      :job_failure_handler,
+                      :job_exception_handler,
+                      :job_info_handler
 
         def initialize(options = {})
           @init_handler = options.fetch(:init, ->(_batch_jobs){})
           @exit_handler = options.fetch(:exit, ->(_batch_jobs){})
           @idle_handler = options.fetch(:idle, ->(_batch_jobs, msg){})
 
+          # @info_handler = options.fetch(:idle, ->(_batch_jobs, msg){})
+
           @job_handler = options.fetch(:job, ->(_batch_jobs, job_id, msg){})
 
-          # @job_start_handler = options.fetch(:job_start, ->(){})
-          # @job_stop_handler = options.fetch(:job_stop, ->(){})
-          # @job_info_handler = options.fetch(:job_info, ->(){})
+          # @job_begin_handler = options.fetch(:job_begin, ->(){})
+          # @job_success_handler = options.fetch(:job_success, ->(){})
+          # @job_failure_handler = options.fetch(:job_failure, ->(){})
           # @job_exception_handler = options.fetch(:job_exception, ->(){})
+          # @job_info_handler = options.fetch(:job_info, ->(){})
 
           @idle_duration = nil
         end
@@ -59,12 +64,17 @@ module Resque
           idle_handler.call(batch_jobs, msg)
         end
 
+        # def send_info(batch_jobs, msg)
+        # end
+
         def send_job(batch_jobs, msg)
           # TODO
           # job_id = msg.delete("job_id")
           job_id = msg["job_id"]
           job_handler.call(batch_jobs, job_id, msg)
         end
+
+
       end
     end
   end
