@@ -15,10 +15,12 @@ module Resque
       JOB_HEARTBEAT_TTL = 60
 
       attr_reader :id,
-                  :batch_jobs
+                  :batch_jobs,
+                  :message_handler
 
-      def initialize(id: nil)
+      def initialize(id: nil, message_handler: Resque::Plugins::Batch::MessageHandler.new)
         @id = id || get_id
+        @message_handler = message_handler
         @batch_jobs = []
       end
 
