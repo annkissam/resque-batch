@@ -28,7 +28,7 @@ module Resque
         batch_jobs << Resque::Plugins::Batch::BatchJobInfo.new(id, batch_jobs.count, klass, *args)
       end
 
-      def perform(idle_callback_timeout = nil, &block)
+      def perform(&block)
         # Make sure the incoming message queue is clear
         if redis.llen(batch_key) > 0
           raise "redis list #{batch_key} is not empty"
@@ -49,7 +49,7 @@ module Resque
           end
         end
 
-        block.call(batch_jobs, :init, nil) if block
+        message_handler.send_message(self, :init)
 
         last_heartbeat_check = Time.now
         last_activity_check = Time.now
@@ -85,21 +85,14 @@ module Resque
               end
             end
 
-            if idle_callback_timeout
-              if Time.now - last_activity_check > idle_callback_timeout
-                if block
-                  block.call(batch_jobs, :idle, decoded_msg)
-                else
-                  raise "IDLE: there appears to be no activity"
-                end
-              end
-            end
+            idle_duration = Time.now - last_activity_check
+            message_handler.send_message(self, :idle, {duration: idle_duration})
 
             sleep(1)
           end
         end
 
-        block.call(batch_jobs, :exit, nil) if block
+        message_handler.send_message(self, :exit)
 
         # Cleanup
         redis.del(batch_key)
