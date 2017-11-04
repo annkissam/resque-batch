@@ -27,9 +27,13 @@ module Resque
             begin
               worker_job_info.begin!
 
-              success, msg = perform_work(*params)
+              success, data = perform_work(*params)
 
-              worker_job_info.finish!(success, msg)
+              if success
+                worker_job_info.success!(data)
+              else
+                worker_job_info.failure!(data)
+              end
             rescue StandardError => exception
               worker_job_info.exception!(exception)
 

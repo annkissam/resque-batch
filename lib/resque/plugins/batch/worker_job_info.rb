@@ -15,12 +15,12 @@ module Resque
           redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'begin'))
         end
 
-        def finish!(success, data)
-          if success
-            redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'success', data: data))
-          else
-            redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'failure', data: data))
-          end
+        def success!(data)
+          redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'success', data: data))
+        end
+
+        def failure!(data)
+          redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'failure', data: data))
         end
 
         def exception!(exception)
