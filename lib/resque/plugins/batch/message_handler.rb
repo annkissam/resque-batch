@@ -9,7 +9,7 @@ module Resque
         attr_accessor :init_handler,
                       :exit_handler,
                       :idle_handler,
-                      :status_handler
+                      :job_handler
                       # :job_start_handler,
                       # :job_stop_handler,
                       # :job_info_handler,
@@ -18,9 +18,9 @@ module Resque
         def initialize(options = {})
           @init_handler = options.fetch(:init, ->(_batch_jobs){})
           @exit_handler = options.fetch(:exit, ->(_batch_jobs){})
-          @idle_handler = options.fetch(:idle, ->(_batch_jobs, msg = {}){})
+          @idle_handler = options.fetch(:idle, ->(_batch_jobs, msg){})
 
-          @status_handler = options.fetch(:status, ->(_batch_jobs, msg){byebug})
+          @job_handler = options.fetch(:job, ->(_batch_jobs, job_id, msg){})
 
           # @job_start_handler = options.fetch(:job_start, ->(){})
           # @job_stop_handler = options.fetch(:job_stop, ->(){})
@@ -30,14 +30,6 @@ module Resque
           @idle_duration = nil
         end
 
-        # def send_idle(batch)
-        #   idle_handler.call(batch.batch_jobs)
-        # end
-
-        # def receive_msg(batch, msg)
-        #   status_handler.call(batch.batch_jobs, msg)
-        # end
-
         def send_message(batch, type, msg = {})
           case type
           when :init
@@ -46,6 +38,8 @@ module Resque
             send_exit(batch.batch_jobs)
           when :idle
             send_idle(batch.batch_jobs, msg)
+          when :job
+            send_job(batch.batch_jobs, msg)
           else
             raise "unknown message type: #{type}"
           end
@@ -65,8 +59,12 @@ module Resque
           idle_handler.call(batch_jobs, msg)
         end
 
-        # def receive_job_msg(batch, msg)
-        # end
+        def send_job(batch_jobs, msg)
+          # TODO
+          # job_id = msg.delete("job_id")
+          job_id = msg["job_id"]
+          job_handler.call(batch_jobs, job_id, msg)
+        end
       end
     end
   end

@@ -28,7 +28,7 @@ module Resque
         batch_jobs << Resque::Plugins::Batch::BatchJobInfo.new(id, batch_jobs.count, klass, *args)
       end
 
-      def perform(&block)
+      def perform
         # Make sure the incoming message queue is clear
         if redis.llen(batch_key) > 0
           raise "redis list #{batch_key} is not empty"
@@ -59,12 +59,15 @@ module Resque
 
           if msg
             decoded_msg = Resque.decode(msg)
-            job_id = decoded_msg["id"].to_i
-            batch_jobs[job_id].process_job_msg(decoded_msg)
+
+            if decoded_msg["job_id"]
+              job_id = decoded_msg["job_id"]
+              batch_jobs[job_id].process_job_msg(decoded_msg)
+            end
 
             last_activity_check = Time.now
 
-            block.call(batch_jobs, :status, decoded_msg) if block
+            message_handler.send_message(self, :job, decoded_msg)
           else
             # Reasons these may be no message
             # No Workers - check worker count

@@ -106,53 +106,60 @@ RSpec.describe Resque::Plugins::Batch do
         process_job(:batch)
       end
 
-      result = batch.perform do |batch_jobs, msg, data|
-        case msg
-        when :status
-          id = data["id"]
-          status = data["status"]
+      message_handler.job_handler = ->(batch_jobs, job_id, job_msg) do
+        msg = job_msg["msg"]
+        data = job_msg["data"]
 
-          if id == 0 && status == 'running'
-            expect(batch_jobs[0].status).to eq("running")
-            expect(batch_jobs[0].klass).to eq(Job)
-            expect(batch_jobs[0].args).to eq([11])
-            expect(batch_jobs[0].msg).to eq(nil)
-            expect(batch_jobs[0].exception).to eq(nil)
+        if job_id == 0 && msg == 'begin'
+          expect(data).to eq(nil)
 
-          elsif id == 0 && status == 'success'
-            expect(batch_jobs[0].status).to eq("success")
-            expect(batch_jobs[0].klass).to eq(Job)
-            expect(batch_jobs[0].args).to eq([11])
-            expect(batch_jobs[0].msg).to eq("test-success")
-            expect(batch_jobs[0].exception).to eq(nil)
+          expect(batch_jobs[0].status).to eq("running")
+          expect(batch_jobs[0].klass).to eq(Job)
+          expect(batch_jobs[0].args).to eq([11])
+          expect(batch_jobs[0].result).to eq(nil)
+          expect(batch_jobs[0].exception).to eq(nil)
 
-            # Kickoff a second Job
-            process_job(:batch)
+        elsif job_id == 0 && msg == 'success'
+          expect(data).to eq("test-success")
 
-          elsif id == 1 && status == 'running'
-            expect(batch_jobs[1].status).to eq("running")
-            expect(batch_jobs[1].klass).to eq(Job)
-            expect(batch_jobs[1].args).to eq([12, "test2"])
-            expect(batch_jobs[1].msg).to eq(nil)
-            expect(batch_jobs[1].exception).to eq(nil)
-
-          elsif id == 1 && status == 'success'
-            expect(batch_jobs[1].status).to eq("success")
-            expect(batch_jobs[1].klass).to eq(Job)
-            expect(batch_jobs[1].args).to eq([12, "test2"])
-            expect(batch_jobs[1].msg).to eq("test2-success")
-            expect(batch_jobs[1].exception).to eq(nil)
-
-          else
-            raise "SPEC FAILURE"
-          end
-        when :exit
           expect(batch_jobs[0].status).to eq("success")
+          expect(batch_jobs[0].klass).to eq(Job)
+          expect(batch_jobs[0].args).to eq([11])
+          expect(batch_jobs[0].result).to eq("test-success")
+          expect(batch_jobs[0].exception).to eq(nil)
+
+          # Kickoff a second Job
+          process_job(:batch)
+
+        elsif job_id == 1 && msg == 'begin'
+          expect(data).to eq(nil)
+
+          expect(batch_jobs[1].status).to eq("running")
+          expect(batch_jobs[1].klass).to eq(Job)
+          expect(batch_jobs[1].args).to eq([12, "test2"])
+          expect(batch_jobs[1].result).to eq(nil)
+          expect(batch_jobs[1].exception).to eq(nil)
+
+        elsif job_id == 1 && msg == 'success'
+          expect(data).to eq("test2-success")
+
           expect(batch_jobs[1].status).to eq("success")
+          expect(batch_jobs[1].klass).to eq(Job)
+          expect(batch_jobs[1].args).to eq([12, "test2"])
+          expect(batch_jobs[1].result).to eq("test2-success")
+          expect(batch_jobs[1].exception).to eq(nil)
+
         else
-          raise "Unknown message #{msg}"
+          raise "SPEC FAILURE"
         end
       end
+
+      message_handler.exit_handler = ->(batch_jobs) do
+        expect(batch_jobs[0].status).to eq("success")
+        expect(batch_jobs[1].status).to eq("success")
+      end
+
+      result = batch.perform
 
       expect(result).to be_truthy
 
@@ -166,6 +173,10 @@ RSpec.describe Resque::Plugins::Batch do
 
       expect(logging_message_handler.log).to eq([
         [:init, {}],
+        [:job, {"job_id" => 0, "msg" => "begin"}],
+        [:job, {"job_id" => 0, "msg" => "success", "data" => "test-success"}],
+        [:job, {"job_id" => 1, "msg" => "begin"}],
+        [:job, {"job_id" => 1, "msg" => "success", "data" => "test2-success"}],
         [:exit, {}]
       ])
     end
@@ -361,25 +372,27 @@ RSpec.describe Resque::Plugins::Batch do
       begin
         t = Thread.new do
           loop do
-            process_job
+            if Resque.size(:batch) > 0
+              process_job(:batch)
+            else
+              sleep(0.1)
+            end
           end
         end
 
         batch = Resque::Plugins::Batch.new()
         batch.enqueue(LongJob)
 
-        expect {
-          batch.perform do |batch_jobs, msg, data|
-            case msg
-            when :status
-              id = data["id"]
-              status = data["status"]
+        batch.message_handler.job_handler = ->(batch_jobs, job_id, job_msg) do
+          msg = job_msg["msg"]
 
-              if id == 0 && status == 'running'
-                t.exit
-              end
-            end
+          if job_id == 0 && msg == 'begin'
+            t.exit
           end
+        end
+
+        expect {
+          batch.perform
         }.to raise_error(StandardError, "a job died...")
       ensure
         t.exit
@@ -392,7 +405,11 @@ RSpec.describe Resque::Plugins::Batch do
       begin
         t = Thread.new do
           loop do
-            process_job
+            if Resque.size(:batch) > 0
+              process_job(:batch)
+            else
+              sleep(0.1)
+            end
           end
         end
 
@@ -408,21 +425,21 @@ RSpec.describe Resque::Plugins::Batch do
         expect(batch.batch_jobs[0].status).to eq("success")
         expect(batch.batch_jobs[0].klass).to eq(Job)
         expect(batch.batch_jobs[0].args).to eq([11])
-        expect(batch.batch_jobs[0].msg).to eq("test-success")
+        expect(batch.batch_jobs[0].result).to eq("test-success")
         expect(batch.batch_jobs[0].exception).to eq(nil)
         expect(batch.batch_jobs[0].duration).to be > 0
 
         expect(batch.batch_jobs[1].status).to eq("failure")
         expect(batch.batch_jobs[1].klass).to eq(Job)
         expect(batch.batch_jobs[1].args).to eq([12, "ERROR"])
-        expect(batch.batch_jobs[1].msg).to eq("ERROR")
+        expect(batch.batch_jobs[1].result).to eq("ERROR")
         expect(batch.batch_jobs[1].exception).to eq(nil)
         expect(batch.batch_jobs[1].duration).to be > 0
 
         expect(batch.batch_jobs[2].status).to eq("success")
         expect(batch.batch_jobs[2].klass).to eq(Job)
         expect(batch.batch_jobs[2].args).to eq([13])
-        expect(batch.batch_jobs[2].msg).to eq("test-success")
+        expect(batch.batch_jobs[2].result).to eq("test-success")
         expect(batch.batch_jobs[2].exception).to eq(nil)
         expect(batch.batch_jobs[2].duration).to be > 0
 
@@ -437,7 +454,11 @@ RSpec.describe Resque::Plugins::Batch do
       begin
         t = Thread.new do
           loop do
-            process_job
+            if Resque.size(:batch) > 0
+              process_job(:batch)
+            else
+              sleep(0.1)
+            end
           end
         end
 
@@ -453,21 +474,23 @@ RSpec.describe Resque::Plugins::Batch do
         expect(batch.batch_jobs[0].status).to eq("success")
         expect(batch.batch_jobs[0].klass).to eq(Job)
         expect(batch.batch_jobs[0].args).to eq([11])
-        expect(batch.batch_jobs[0].msg).to eq("test-success")
+        expect(batch.batch_jobs[0].result).to eq("test-success")
         expect(batch.batch_jobs[0].exception).to eq(nil)
         expect(batch.batch_jobs[0].duration).to be > 0
 
         expect(batch.batch_jobs[1].status).to eq("exception")
         expect(batch.batch_jobs[1].klass).to eq(Job)
         expect(batch.batch_jobs[1].args).to eq([12, "EXCEPTION"])
-        expect(batch.batch_jobs[1].msg).to eq(nil)
-        expect(batch.batch_jobs[1].exception).to eq("Unknown Exception")
+        expect(batch.batch_jobs[1].result).to eq(nil)
+        expect(batch.batch_jobs[1].exception.keys).to eq(["class", "message", "backtrace"])
+        expect(batch.batch_jobs[1].exception["class"]).to eq("RuntimeError")
+        expect(batch.batch_jobs[1].exception["message"]).to eq("Unknown Exception")
         expect(batch.batch_jobs[1].duration).to be > 0
 
         expect(batch.batch_jobs[2].status).to eq("success")
         expect(batch.batch_jobs[2].klass).to eq(Job)
         expect(batch.batch_jobs[2].args).to eq([13])
-        expect(batch.batch_jobs[2].msg).to eq("test-success")
+        expect(batch.batch_jobs[2].result).to eq("test-success")
         expect(batch.batch_jobs[2].exception).to eq(nil)
         expect(batch.batch_jobs[2].duration).to be > 0
       ensure

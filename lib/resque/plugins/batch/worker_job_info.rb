@@ -12,19 +12,19 @@ module Resque
         end
 
         def begin!
-          redis.rpush(batch_key, Resque.encode(id: job_id, status: 'running'))
+          redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'begin'))
         end
 
-        def finish!(success, msg)
+        def finish!(success, data)
           if success
-            redis.rpush(batch_key, Resque.encode(id: job_id, status: 'success', msg: msg))
+            redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'success', data: data))
           else
-            redis.rpush(batch_key, Resque.encode(id: job_id, status: 'failure', msg: msg))
+            redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'failure', data: data))
           end
         end
 
         def exception!(exception)
-          redis.rpush(batch_key, Resque.encode(id: job_id, status: 'exception', exception: exception))
+          redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'exception', data: {class: exception.class, message: exception.message, backtrace: exception.backtrace}))
         end
 
         def heartbeat!

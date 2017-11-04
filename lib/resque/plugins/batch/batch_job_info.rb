@@ -10,7 +10,7 @@ module Resque
                     :args
 
         attr_reader :status,
-                    :msg,
+                    :result,
                     :exception,
                     :duration
 
@@ -44,20 +44,19 @@ module Resque
 
         # Process the msg sent from WorkerJobInfo
         def process_job_msg(job_msg)
-          job_msg_status = job_msg["status"]
-          job_msg_msg = job_msg["msg"]
-          job_msg_exception = job_msg["exception"]
+          msg = job_msg["msg"]
+          data = job_msg["data"]
 
-          if status == 'pending' && job_msg_status == 'running'
-            @status = job_msg_status
+          if status == 'pending' && msg == 'begin'
+            @status = 'running'
             @start_time = Time.now
-          elsif status == 'running' && (job_msg_status == 'success' || job_msg_status == 'failure')
-            @status = job_msg_status
-            @msg = job_msg_msg
+          elsif status == 'running' && (msg == 'success' || msg == 'failure')
+            @status = msg
+            @result = data
             @duration = Time.now - @start_time
-          elsif status == 'running' && job_msg_status == 'exception'
-            @status = job_msg_status
-            @exception = job_msg_exception
+          elsif status == 'running' && msg == 'exception'
+            @status = 'exception'
+            @exception = data
             @duration = Time.now - @start_time
           else
             raise "State machine Error #{job_msg}"
