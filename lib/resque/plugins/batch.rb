@@ -5,6 +5,7 @@ require "resque/plugins/batch/version"
 
 require "resque/plugins/batch/batch_job_info"
 require "resque/plugins/batch/job"
+require "resque/plugins/batch/message_handler"
 require "resque/plugins/batch/worker_job_info"
 
 module Resque
@@ -16,7 +17,7 @@ module Resque
       attr_reader :id,
                   :batch_jobs
 
-      def initialize(id = nil)
+      def initialize(id: nil)
         @id = id || get_id
         @batch_jobs = []
       end
