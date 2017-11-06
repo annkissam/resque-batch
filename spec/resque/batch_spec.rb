@@ -51,6 +51,14 @@ class LoggingMessageHander
     @log << [type, msg]
     message_handler.send_message(batch, type, msg)
   end
+
+  def job_msgs_for_job_id(job_id)
+    job_msgs.select {|_type, msg| msg["job_id"] == job_id}
+  end
+
+  def job_msgs
+    @log.select {|type, _msg| type == :job}
+  end
 end
 
 # NOTE: Normally this will be async, but it's easier to test this way
@@ -70,6 +78,9 @@ RSpec.describe Resque::Plugins::Batch do
     Resque.remove_queue(:batch)
   end
 
+  let(:message_handler) { Resque::Plugins::Batch::MessageHandler.new }
+  let(:logging_message_handler) { LoggingMessageHander.new(message_handler: message_handler) }
+
   it "has a version number" do
     expect(Resque::Plugins::Batch::VERSION).not_to be nil
   end
@@ -80,9 +91,6 @@ RSpec.describe Resque::Plugins::Batch do
     end
 
     it "works (with a message_handler)" do
-      message_handler = Resque::Plugins::Batch::MessageHandler.new
-      logging_message_handler = LoggingMessageHander.new(message_handler: message_handler)
-
       batch = Resque::Plugins::Batch.new(message_handler: logging_message_handler)
       batch.enqueue(Job, 11)
       batch.enqueue(Job, 12, "test2")
@@ -346,10 +354,10 @@ RSpec.describe Resque::Plugins::Batch do
 
   context "idle message" do
     it "sends an idle message" do
-      batch = Resque::Plugins::Batch.new
+      batch = Resque::Plugins::Batch.new(message_handler: logging_message_handler)
       batch.enqueue(LongJob)
 
-      batch.message_handler.idle_handler = ->(_batch_jobs, msg) do
+      message_handler.idle_handler = ->(_batch_jobs, msg) do
         expect(msg.keys).to eq([:duration])
         expect(msg[:duration]).to be > 0
 
@@ -359,6 +367,13 @@ RSpec.describe Resque::Plugins::Batch do
       expect {
         result = batch.perform
       }.to raise_error(StandardError, "SIGNAL")
+
+      expect(logging_message_handler.log.size).to eq(2)
+      expect(logging_message_handler.log[0]).to eq([:init, {}])
+      type, msg = logging_message_handler.log[1]
+      expect(type).to eq(:idle)
+      expect(msg.keys).to eq([:duration])
+      expect(msg[:duration]).to be > 0
     end
   end
 
@@ -380,10 +395,10 @@ RSpec.describe Resque::Plugins::Batch do
           end
         end
 
-        batch = Resque::Plugins::Batch.new()
+        batch = Resque::Plugins::Batch.new(message_handler: logging_message_handler)
         batch.enqueue(LongJob)
 
-        batch.message_handler.job_handler = ->(batch_jobs, job_id, job_msg) do
+        message_handler.job_handler = ->(batch_jobs, job_id, job_msg) do
           msg = job_msg["msg"]
 
           if job_id == 0 && msg == 'begin'
@@ -394,6 +409,12 @@ RSpec.describe Resque::Plugins::Batch do
         expect {
           batch.perform
         }.to raise_error(StandardError, "a job died...")
+
+        expect(logging_message_handler.job_msgs.size).to eq(1)
+
+        expect(logging_message_handler.job_msgs_for_job_id(0)[0]).to eq([:job, {"job_id" => 0, "msg" => "begin"}])
+        # expect(logging_message_handler.job_msgs_for_job_id(0)[0]).to eq([:job, {"job_id" => 0, "msg" => "flatline"}])
+
       ensure
         t.exit
       end
@@ -413,8 +434,7 @@ RSpec.describe Resque::Plugins::Batch do
           end
         end
 
-        batch = Resque::Plugins::Batch.new()
-        batch.enqueue(Job, 11)
+        batch = Resque::Plugins::Batch.new(message_handler: logging_message_handler)
         batch.enqueue(Job, 12, "ERROR")
         batch.enqueue(Job, 13)
 
@@ -422,26 +442,27 @@ RSpec.describe Resque::Plugins::Batch do
 
         expect(result).to be_falsey
 
-        expect(batch.batch_jobs[0].status).to eq("success")
+        expect(batch.batch_jobs[0].status).to eq("failure")
         expect(batch.batch_jobs[0].klass).to eq(Job)
-        expect(batch.batch_jobs[0].args).to eq([11])
-        expect(batch.batch_jobs[0].result).to eq("test-success")
+        expect(batch.batch_jobs[0].args).to eq([12, "ERROR"])
+        expect(batch.batch_jobs[0].result).to eq("ERROR")
         expect(batch.batch_jobs[0].exception).to eq(nil)
         expect(batch.batch_jobs[0].duration).to be > 0
 
-        expect(batch.batch_jobs[1].status).to eq("failure")
+        expect(batch.batch_jobs[1].status).to eq("success")
         expect(batch.batch_jobs[1].klass).to eq(Job)
-        expect(batch.batch_jobs[1].args).to eq([12, "ERROR"])
-        expect(batch.batch_jobs[1].result).to eq("ERROR")
+        expect(batch.batch_jobs[1].args).to eq([13])
+        expect(batch.batch_jobs[1].result).to eq("test-success")
         expect(batch.batch_jobs[1].exception).to eq(nil)
         expect(batch.batch_jobs[1].duration).to be > 0
 
-        expect(batch.batch_jobs[2].status).to eq("success")
-        expect(batch.batch_jobs[2].klass).to eq(Job)
-        expect(batch.batch_jobs[2].args).to eq([13])
-        expect(batch.batch_jobs[2].result).to eq("test-success")
-        expect(batch.batch_jobs[2].exception).to eq(nil)
-        expect(batch.batch_jobs[2].duration).to be > 0
+        expect(logging_message_handler.job_msgs.size).to eq(4)
+
+        expect(logging_message_handler.job_msgs_for_job_id(0)[0]).to eq([:job, {"job_id" => 0, "msg" => "begin"}])
+        expect(logging_message_handler.job_msgs_for_job_id(0)[1]).to eq([:job, {"job_id" => 0, "msg" => "failure", "data" => "ERROR"}])
+
+        expect(logging_message_handler.job_msgs_for_job_id(1)[0]).to eq([:job, {"job_id" => 1, "msg" => "begin"}])
+        expect(logging_message_handler.job_msgs_for_job_id(1)[1]).to eq([:job, {"job_id" => 1, "msg" => "success", "data" => "test-success"}])
 
       ensure
         t.exit
@@ -462,8 +483,7 @@ RSpec.describe Resque::Plugins::Batch do
           end
         end
 
-        batch = Resque::Plugins::Batch.new()
-        batch.enqueue(Job, 11)
+        batch = Resque::Plugins::Batch.new(message_handler: logging_message_handler)
         batch.enqueue(Job, 12, "EXCEPTION")
         batch.enqueue(Job, 13)
 
@@ -471,28 +491,38 @@ RSpec.describe Resque::Plugins::Batch do
 
         expect(result).to be_falsey
 
-        expect(batch.batch_jobs[0].status).to eq("success")
+        expect(batch.batch_jobs[0].status).to eq("exception")
         expect(batch.batch_jobs[0].klass).to eq(Job)
-        expect(batch.batch_jobs[0].args).to eq([11])
-        expect(batch.batch_jobs[0].result).to eq("test-success")
-        expect(batch.batch_jobs[0].exception).to eq(nil)
+        expect(batch.batch_jobs[0].args).to eq([12, "EXCEPTION"])
+        expect(batch.batch_jobs[0].result).to eq(nil)
+        expect(batch.batch_jobs[0].exception.keys).to eq(["class", "message", "backtrace"])
+        expect(batch.batch_jobs[0].exception["class"]).to eq("RuntimeError")
+        expect(batch.batch_jobs[0].exception["message"]).to eq("Unknown Exception")
         expect(batch.batch_jobs[0].duration).to be > 0
 
-        expect(batch.batch_jobs[1].status).to eq("exception")
+        expect(batch.batch_jobs[1].status).to eq("success")
         expect(batch.batch_jobs[1].klass).to eq(Job)
-        expect(batch.batch_jobs[1].args).to eq([12, "EXCEPTION"])
-        expect(batch.batch_jobs[1].result).to eq(nil)
-        expect(batch.batch_jobs[1].exception.keys).to eq(["class", "message", "backtrace"])
-        expect(batch.batch_jobs[1].exception["class"]).to eq("RuntimeError")
-        expect(batch.batch_jobs[1].exception["message"]).to eq("Unknown Exception")
+        expect(batch.batch_jobs[1].args).to eq([13])
+        expect(batch.batch_jobs[1].result).to eq("test-success")
+        expect(batch.batch_jobs[1].exception).to eq(nil)
         expect(batch.batch_jobs[1].duration).to be > 0
 
-        expect(batch.batch_jobs[2].status).to eq("success")
-        expect(batch.batch_jobs[2].klass).to eq(Job)
-        expect(batch.batch_jobs[2].args).to eq([13])
-        expect(batch.batch_jobs[2].result).to eq("test-success")
-        expect(batch.batch_jobs[2].exception).to eq(nil)
-        expect(batch.batch_jobs[2].duration).to be > 0
+        expect(logging_message_handler.job_msgs.size).to eq(4)
+
+        expect(logging_message_handler.job_msgs_for_job_id(0)[0]).to eq([:job, {"job_id" => 0, "msg" => "begin"}])
+        msg = logging_message_handler.job_msgs_for_job_id(0)[1][1]
+        expect(msg.keys).to eq(["job_id", "msg", "data"])
+        expect(msg["job_id"]).to eq(0)
+        expect(msg["msg"]).to eq("exception")
+        data = msg["data"]
+        expect(data.keys).to eq(["class", "message", "backtrace"])
+        expect(data["class"]).to eq("RuntimeError")
+        expect(data["message"]).to eq("Unknown Exception")
+        expect(data["backtrace"].size).to be > 0
+
+        expect(logging_message_handler.job_msgs_for_job_id(1)[0]).to eq([:job, {"job_id" => 1, "msg" => "begin"}])
+        expect(logging_message_handler.job_msgs_for_job_id(1)[1]).to eq([:job, {"job_id" => 1, "msg" => "success", "data" => "test-success"}])
+
       ensure
         t.exit
       end

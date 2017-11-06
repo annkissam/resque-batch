@@ -69,10 +69,10 @@ module Resque
 
             message_handler.send_message(self, :job, decoded_msg)
           else
-            # Reasons these may be no message
+            # Reasons there may be no message
             # No Workers - check worker count
             # Workers are processing another batch - register batches, check status
-            # A Job takes a long time - send a headbeat
+            # A Job takes a long time - send a heartbeat
             # A Job dies - send a heartbeat
 
             if Time.now - last_heartbeat_check > JOB_HEARTBEAT
