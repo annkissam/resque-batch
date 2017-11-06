@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    resque-batch (0.1.0)
+    resque-batch (0.2.0)
       resque (~> 1.25)
 
 GEM
@@ -58,4 +58,4 @@ DEPENDENCIES
   rspec (~> 3.0)
 
 BUNDLED WITH
-   1.15.3
+   1.16.0

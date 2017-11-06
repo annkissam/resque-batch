@@ -24,7 +24,7 @@ module Resque
         end
 
         def exception!(exception)
-          redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'exception', data: {class: exception.class, message: exception.message, backtrace: exception.backtrace}))
+          redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'exception', data: {class: exception.class.name, message: exception.message, backtrace: exception.backtrace}))
         end
 
         # NOTE: This is the only message that the client should send
