@@ -1,11 +1,11 @@
 # coding: utf-8
 lib = File.expand_path("../lib", __FILE__)
 $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
-require "resque/batch/version"
+require "resque/plugins/batch/version"
 
 Gem::Specification.new do |spec|
   spec.name          = "resque-batch"
-  spec.version       = Resque::Batch::VERSION
+  spec.version       = Resque::Plugins::Batch::VERSION
   spec.authors       = ["Eric Sullivan"]
   spec.email         = ["eric.sullivan@annkissam.com"]
 
