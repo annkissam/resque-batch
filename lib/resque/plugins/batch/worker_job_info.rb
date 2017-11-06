@@ -27,6 +27,11 @@ module Resque
           redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'exception', data: {class: exception.class, message: exception.message, backtrace: exception.backtrace}))
         end
 
+        # NOTE: This is the only message that the client should send
+        def info!(data)
+          redis.rpush(batch_key, Resque.encode(job_id: job_id, msg: 'info', data: data))
+        end
+
         def heartbeat!
           redis.set(heartbeat_key, "running")
           redis.expire(heartbeat_key, Resque::Plugins::Batch::JOB_HEARTBEAT_TTL)

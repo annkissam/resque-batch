@@ -23,7 +23,7 @@ And then execute:
 * the method is perform_job (not perform)
 * You should return `success, message`
 
-```
+```ruby
 class Archive
   include Resque::Plugins::Batch::Job
 
@@ -36,9 +36,7 @@ class Archive
 end
 ```
 
-### Create a Batch
-
-You can wait for the result:
+### Create a Batch (and call perform)
 
 ```
 batch = Resque::Plugins::Batch.new()
@@ -47,22 +45,48 @@ batch.enqueue(Job, 12, "test2")
 result = batch.perform
 ```
 
-Or you can process results as they arrive:
+## message_handler
+
+You can process results as they arrive w/ a message_handler:
 
 ```
-result = batch.perform do |batch_jobs, msg, data|
-  case msg
-  when :init
-    "Notify client it's starting"
-  when :status
-    "Keep track of state"
-  when :exit
-    "You're done!"
-  else
-    raise "Unknown message #{msg}"
+batch.init_handler do |batch_jobs|
+  puts "Notify client it's starting"
+end
+
+batch.exit_handler do |batch_jobs|
+  puts "You're done!"
+end
+
+batch.job_begin_handler do |batch_jobs, job_id|
+  puts "Job #{job_id} started w/ params #{batch_jobs[job_id].args}"
+end
+
+batch.job_success_handler do |batch_jobs, job_id, data|
+  puts "Job #{job_id} succeeded w/ results #{data}"
+end
+
+result = batch.perform
+```
+
+If you need to send additional notifications there's an 'info' message
+
+```
+class Archive
+  include Resque::Plugins::Batch::Job
+  
+  def self.perform_job(repo_id, branch = 'master')
+    ...
+      @worker_job_info.info!({your: "DATA"})
+    ...
   end
 end
+
+batch.job_info_handler do |batch_jobs, job_id, data|
+  puts "Job #{job_id} sent info with your: #{data["your"]}"
+end
 ```
+
 
 ## Development
 

@@ -15,8 +15,8 @@ module Resque
       JOB_HEARTBEAT_TTL = 60
 
       attr_reader :id,
-                  :batch_jobs,
-                  :message_handler
+                  :message_handler,
+                  :batch_jobs
 
       def initialize(id: nil, message_handler: Resque::Plugins::Batch::MessageHandler.new)
         @id = id || get_id
@@ -39,7 +39,16 @@ module Resque
             klass = batch_job.klass
             args = batch_job.args
             args = [id, job_id] + args
-            Resque::Job.create(batch_queue, klass, *args)
+
+            if Resque.inline
+              begin
+                Resque::Job.create(batch_queue, klass, *args)
+              rescue StandardError => exception
+                # NOTE: We still want to use the normal job messaging
+              end
+            else
+              Resque::Job.create(batch_queue, klass, *args)
+            end
           end
         end
 

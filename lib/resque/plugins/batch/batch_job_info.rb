@@ -58,6 +58,9 @@ module Resque
             @status = 'exception'
             @exception = data
             @duration = Time.now - @start_time
+          elsif msg == "info"
+            # Ignore client defined messages
+            true
           else
             raise "State machine Error #{job_msg}"
           end

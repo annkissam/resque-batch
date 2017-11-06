@@ -6,6 +6,9 @@ module Resque
           base.extend ClassMethods
           base.class_eval do
             @queue = :batch
+
+            # NOTE: This won't be populated until the job is running...
+            # attr_reader :worker_job_info
           end
         end
 
@@ -13,34 +16,30 @@ module Resque
           def perform(batch_id, job_id, *params)
             heartbeat_thread = nil
 
-            worker_job_info = Resque::Plugins::Batch::WorkerJobInfo.new(batch_id, job_id)
+            @worker_job_info = Resque::Plugins::Batch::WorkerJobInfo.new(batch_id, job_id)
 
-            worker_job_info.heartbeat!
+            @worker_job_info.heartbeat!
 
             heartbeat_thread = Thread.new do
               loop do
                 sleep(Resque::Plugins::Batch::JOB_HEARTBEAT)
-                worker_job_info.heartbeat!
+                @worker_job_info.heartbeat!
               end
             end
 
             begin
-              worker_job_info.begin!
+              @worker_job_info.begin!
 
               success, data = perform_work(*params)
 
               if success
-                worker_job_info.success!(data)
+                @worker_job_info.success!(data)
               else
-                worker_job_info.failure!(data)
+                @worker_job_info.failure!(data)
               end
             rescue StandardError => exception
-              worker_job_info.exception!(exception)
-
-              # TODO: Is this correct?
-              if Resque.inline
-                raise exception
-              end
+              @worker_job_info.exception!(exception)
+              raise exception
             end
           ensure
             if heartbeat_thread

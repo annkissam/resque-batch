@@ -9,8 +9,7 @@ module Resque
         attr_accessor :init_handler,
                       :exit_handler,
                       :idle_handler,
-                      :info_handler,
-                      :job_handler,
+                      # :info_handler,
                       :job_begin_handler,
                       :job_success_handler,
                       :job_failure_handler,
@@ -22,17 +21,13 @@ module Resque
           @exit_handler = options.fetch(:exit, ->(_batch_jobs){})
           @idle_handler = options.fetch(:idle, ->(_batch_jobs, msg){})
 
-          # @info_handler = options.fetch(:idle, ->(_batch_jobs, msg){})
+          # @info_handler = options.fetch(:info, ->(_batch_jobs, msg){})
 
-          @job_handler = options.fetch(:job, ->(_batch_jobs, job_id, msg){})
-
-          # @job_begin_handler = options.fetch(:job_begin, ->(){})
-          # @job_success_handler = options.fetch(:job_success, ->(){})
-          # @job_failure_handler = options.fetch(:job_failure, ->(){})
-          # @job_exception_handler = options.fetch(:job_exception, ->(){})
-          # @job_info_handler = options.fetch(:job_info, ->(){})
-
-          @idle_duration = nil
+          @job_begin_handler = options.fetch(:job_begin, ->(_batch_jobs, _job_id){})
+          @job_success_handler = options.fetch(:job_success, ->(_batch_jobs, _job_id, _data){})
+          @job_failure_handler = options.fetch(:job_failure, ->(_batch_jobs, _job_id, _data){})
+          @job_exception_handler = options.fetch(:job_exception, ->(_batch_jobs, _job_id, _data){})
+          @job_info_handler = options.fetch(:job_info, ->(_batch_jobs, _job_id, _data){})
         end
 
         def send_message(batch, type, msg = {})
@@ -68,12 +63,23 @@ module Resque
         # end
 
         def send_job(batch_jobs, msg)
-          # TODO
-          # job_id = msg.delete("job_id")
           job_id = msg["job_id"]
-          job_handler.call(batch_jobs, job_id, msg)
-        end
 
+          case msg["msg"]
+          when "begin"
+            job_begin_handler.call(batch_jobs, job_id)
+          when "success"
+            job_success_handler.call(batch_jobs, job_id, msg["data"])
+          when "failure"
+            job_failure_handler.call(batch_jobs, job_id, msg["data"])
+          when "exception"
+            job_exception_handler.call(batch_jobs, job_id, msg["data"])
+          when "info"
+            job_info_handler.call(batch_jobs, job_id, msg["data"])
+          else
+            raise "unknown msg type: #{msg["msg"]}"
+          end
+        end
 
       end
     end
