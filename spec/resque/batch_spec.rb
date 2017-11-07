@@ -38,9 +38,19 @@ class LongJob
   end
 end
 
+class Batch2QueueJob
+  include Resque::Plugins::Batch::Job
+
+  @queue = :batch_2
+
+  def self.perform_work
+    return true, nil
+  end
+end
+
 # NOTE: Normally this will be async, but it's easier to test this way
 def process_job(queue = :batch)
-  worker = Resque::Worker.new(:batch)
+  worker = Resque::Worker.new(queue)
   worker.fork_per_job = false
   worker.work_one_job
 end
@@ -600,6 +610,51 @@ RSpec.describe Resque::Plugins::Batch do
       ensure
         t.exit
       end
+    end
+  end
+
+  context "Different Queue" do
+    before do
+      Resque.inline = false
+    end
+
+    around(:each) do |example|
+      t = Thread.new do
+        loop do
+          if Resque.size(:batch_2) > 0
+            process_job(:batch_2)
+          else
+            sleep(0.1)
+          end
+        end
+      end
+
+      begin
+        example.run
+      ensure
+        t.exit
+      end
+    end
+
+    it "works (without a message_handler)" do
+      batch = Resque::Plugins::Batch.new()
+      batch.enqueue(Batch2QueueJob)
+      batch.enqueue(Batch2QueueJob)
+      batch.enqueue(Batch2QueueJob)
+
+      expect(Resque.size(:batch_2)).to eq(0)
+      expect(Resque::Stat[:processed]).to eq(0)
+      expect(Resque::Stat[:failed]).to eq(0)
+      expect(Job.processed_jobs).to eq([
+      ])
+
+      result = batch.perform
+
+      expect(result).to be_truthy
+
+      expect(Resque.size(:batch_2)).to eq(0)
+      expect(Resque::Stat[:processed]).to eq(3)
+      expect(Resque::Stat[:failed]).to eq(0)
     end
   end
 end

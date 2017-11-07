@@ -37,17 +37,18 @@ module Resque
         result = redis.multi do
           batch_jobs.each_with_index do |batch_job, job_id|
             klass = batch_job.klass
+            queue = Resque.queue_from_class(klass) || batch_queue
             args = batch_job.args
             args = [id, job_id] + args
 
             if Resque.inline
               begin
-                Resque::Job.create(batch_queue, klass, *args)
+                Resque::Job.create(queue, klass, *args)
               rescue StandardError => exception
                 # NOTE: We still want to use the normal job messaging
               end
             else
-              Resque::Job.create(batch_queue, klass, *args)
+              Resque::Job.create(queue, klass, *args)
             end
           end
         end
@@ -106,10 +107,10 @@ module Resque
 
         message_handler.send_message(self, :exit)
 
+        batch_jobs.all?(&:success?)
+      ensure
         # Cleanup
         redis.del(batch_key)
-
-        batch_jobs.all?(&:success?)
       end
 
       def job_count
