@@ -106,10 +106,10 @@ module Resque
 
         message_handler.send_message(self, :exit)
 
+        batch_jobs.all?(&:success?)
+      ensure
         # Cleanup
         redis.del(batch_key)
-
-        batch_jobs.all?(&:success?)
       end
 
       def job_count
