@@ -5,10 +5,6 @@ module Resque
         def self.included(base)
           base.extend ClassMethods
           base.class_eval do
-            @queue = :batch
-
-            # NOTE: This won't be populated until the job is running...
-            # attr_reader :worker_job_info
           end
         end
 
