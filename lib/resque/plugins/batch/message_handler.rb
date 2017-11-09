@@ -14,7 +14,8 @@ module Resque
                       :job_success_handler,
                       :job_failure_handler,
                       :job_exception_handler,
-                      :job_info_handler
+                      :job_info_handler,
+                      :job_arrhythmia_handler
 
         def initialize(options = {})
           @init_handler = options.fetch(:init, ->(_batch){})
@@ -28,6 +29,7 @@ module Resque
           @job_failure_handler = options.fetch(:job_failure, ->(_batch, _job_id, _data){})
           @job_exception_handler = options.fetch(:job_exception, ->(_batch, _job_id, _data){})
           @job_info_handler = options.fetch(:job_info, ->(_batch, _job_id, _data){})
+          @job_arrhythmia_handler = options.fetch(:job_arrhythmia, ->(_batch, _job_id){})
         end
 
         def send_message(batch, type, msg = {})
@@ -76,6 +78,8 @@ module Resque
             job_exception_handler.call(batch, job_id, msg["data"])
           when "info"
             job_info_handler.call(batch, job_id, msg["data"])
+          when "arrhythmia"
+            job_arrhythmia_handler.call(batch, job_id)
           else
             raise "unknown msg type: #{msg["msg"]}"
           end
