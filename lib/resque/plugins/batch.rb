@@ -12,7 +12,7 @@ module Resque
   module Plugins
     class Batch
       JOB_HEARTBEAT = 45
-      JOB_HEARTBEAT_TTL = 60
+      JOB_HEARTBEAT_TTL = 120
 
       attr_reader :id,
                   :message_handler,
