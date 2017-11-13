@@ -577,7 +577,7 @@ RSpec.describe Resque::Plugins::Batch do
       Resque.inline = false
     end
 
-    it "raises 'a job died' exception" do
+    it "calls the job_arrhythmia_handler when the heartbeat dies" do
       begin
         t = Thread.new do
           loop do
@@ -601,11 +601,29 @@ RSpec.describe Resque::Plugins::Batch do
           end
         end
 
-        expect {
-          batch.perform
-        }.to raise_error(StandardError, "a job died...")
+        message_handler.job_arrhythmia_handler = ->(batch, job_id) do
+          if job_id == 0
+            expect(batch.batch_jobs[0].status).to eq("unknown")
 
-        # TODO: Add a flatline job message
+          else
+            raise "SPEC FAILURE"
+          end
+        end
+
+        allow(message_handler.job_arrhythmia_handler).to receive(:call).and_call_original
+
+        result = batch.perform
+
+        expect(result).to be_falsey
+
+        expect(batch.batch_jobs[0].status).to eq("unknown")
+        expect(batch.batch_jobs[0].klass).to eq(LongJob)
+        expect(batch.batch_jobs[0].args).to eq([])
+        expect(batch.batch_jobs[0].result).to be_nil
+        expect(batch.batch_jobs[0].exception).to be_nil
+        expect(batch.batch_jobs[0].duration).to be > 0
+
+        expect(message_handler.job_arrhythmia_handler).to have_received(:call)
 
       ensure
         t.exit

@@ -35,11 +35,11 @@ module Resque
         end
 
         def incomplete?
-          !complete?
+          !complete? && status != 'unknown'
         end
 
-        def flatlined?
-          redis.get(heartbeat_key) != "running"
+        def heartbeat_running?
+          redis.get(heartbeat_key) == "running"
         end
 
         # Process the msg sent from WorkerJobInfo
@@ -50,17 +50,20 @@ module Resque
           if status == 'pending' && msg == 'begin'
             @status = 'running'
             @start_time = Time.now
-          elsif status == 'running' && (msg == 'success' || msg == 'failure')
+          elsif (status == 'running' || status == 'unknown') && (msg == 'success' || msg == 'failure')
             @status = msg
             @result = data
             @duration = Time.now - @start_time
-          elsif status == 'running' && msg == 'exception'
+          elsif (status == 'running' || status == 'unknown') && msg == 'exception'
             @status = 'exception'
             @exception = data
             @duration = Time.now - @start_time
           elsif msg == "info"
             # Ignore client defined messages
             true
+          elsif msg == "arrhythmia"
+            @status = 'unknown'
+            @duration = Time.now - @start_time
           else
             raise "State machine Error #{job_msg}"
           end
