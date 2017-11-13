@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    resque-batch (0.2.0)
+    resque-batch (0.2.1)
       resque (~> 1.25)
 
 GEM
@@ -16,9 +16,9 @@ GEM
     rack-protection (2.0.0)
       rack
     rake (10.5.0)
-    redis (3.3.5)
-    redis-namespace (1.5.3)
-      redis (~> 3.0, >= 3.0.4)
+    redis (4.0.1)
+    redis-namespace (1.6.0)
+      redis (>= 3.0.4)
     resque (1.27.4)
       mono_logger (~> 1.0)
       multi_json (~> 1.0)
