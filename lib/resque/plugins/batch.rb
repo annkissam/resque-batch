@@ -114,6 +114,12 @@ module Resque
       ensure
         # Cleanup
         redis.del(batch_key)
+
+        # https://github.com/chrisccerami/resque#mysqlerror-mysql-server-has-gone-away
+        # https://github.com/resque/resque/pull/1402
+        # This is a misnomer, this is ensuring that the connection is resumed
+        # After days/hours of idling.
+        ActiveRecord::Base.clear_active_connections!
       end
 
       def job_count
