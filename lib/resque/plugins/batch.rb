@@ -44,9 +44,11 @@ module Resque
             if Resque.inline
               begin
                 Resque::Job.create(queue, klass, *args)
-              rescue StandardError => exception
+              # rubocop:disable Lint/SuppressedException
+              rescue StandardError => _exception
                 # NOTE: We still want to use the normal job messaging
               end
+              # rubocop:enable Lint/SuppressedException
             else
               Resque::Job.create(queue, klass, *args)
             end

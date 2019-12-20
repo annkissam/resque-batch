@@ -592,7 +592,7 @@ RSpec.describe Resque::Plugins::Batch do
         batch = Resque::Plugins::Batch.new(message_handler: message_handler)
         batch.enqueue(LongJob)
 
-        message_handler.job_begin_handler = ->(_batch, job_id) do
+        message_handler.job_begin_handler = ->(_batch_instance, job_id) do
           if job_id == 0
             t.exit
 
@@ -601,9 +601,9 @@ RSpec.describe Resque::Plugins::Batch do
           end
         end
 
-        message_handler.job_arrhythmia_handler = ->(batch, job_id) do
+        message_handler.job_arrhythmia_handler = ->(batch_instance, job_id) do
           if job_id == 0
-            expect(batch.batch_jobs[0].status).to eq("unknown")
+            expect(batch_instance.batch_jobs[0].status).to eq("unknown")
 
           else
             raise "SPEC FAILURE"
