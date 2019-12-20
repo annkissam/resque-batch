@@ -4,6 +4,7 @@ defaults: &defaults
   working_directory: ~/app
   docker:
     - image: circleci/ruby:2.6.5
+    - image: redis
     # - image: circleci/mysql:5.7
     #   environment:
     #     MYSQL_USER: root
