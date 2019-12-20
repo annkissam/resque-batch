@@ -4,11 +4,10 @@ defaults: &defaults
   working_directory: ~/app
   docker:
     - image: circleci/ruby:2.6.5
-    - image: circleci/mysql:5.7
-      environment:
-        MYSQL_USER: root
-        MYSQL_PASSWORD: ''
-        TZ: "/usr/share/zoneinfo/America/New_York"
+    # - image: circleci/mysql:5.7
+    #   environment:
+    #     MYSQL_USER: root
+    #     MYSQL_PASSWORD: ''
 
 jobs:
   build:
@@ -16,6 +15,8 @@ jobs:
     parallelism: 1
     steps:
       - checkout
+
+      - run: gem install bundler:2.1.2
 
       - restore_cache:
           keys:
@@ -39,17 +40,12 @@ jobs:
       - attach_workspace:
           at: ~/
 
+      - run: gem install bundler:2.1.2
       - run: bundle --path vendor/bundle
 
-      - run:
-          name: Wait for DB
-          command: dockerize -wait tcp://localhost:3306 -timeout 1m
-      - run: bundle exec rake db:create
-      - run: bundle exec rake db:schema:load:with_data
-      - run: bundle exec rake db:seed_fu
-      - run: RAILS_ENV=test bundle exec rake db:seed_fu
-      - run: RAILS_ENV=test bundle exec rake db:numbers:create
-      - run: RAILS_ENV=test bundle exec rake db:calendar:create
+      # - run:
+      #     name: Wait for DB
+      #     command: dockerize -wait tcp://localhost:3306 -timeout 1m
       - run:
           name: Run RSpec tests
           command: |
@@ -71,6 +67,7 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/
+      - run: gem install bundler:2.1.2
       - run: bundle --path vendor/bundle
       - run:
           name: Run bundler-audit
