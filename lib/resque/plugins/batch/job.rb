@@ -43,6 +43,11 @@ module Resque
         end
 
         module ClassMethods
+          def perform_work(*)
+            raise NotImplementedError,
+                  'A class that includes Resque::Plugins::Batch::Job must declare a public `perform_work` method'
+          end
+
           def perform(batch_id, job_id, *params)
             heartbeat_thread = nil
 
