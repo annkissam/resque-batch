@@ -577,7 +577,8 @@ RSpec.describe Resque::Plugins::Batch do
       Resque.inline = false
     end
 
-    it "calls the job_arrhythmia_handler when the heartbeat dies" do
+    context 'with one job' do
+      it "calls the job_arrhythmia_handler when the heartbeat dies" do
       begin
         t = Thread.new do
           loop do
@@ -627,6 +628,84 @@ RSpec.describe Resque::Plugins::Batch do
 
       ensure
         t.exit
+      end
+    end
+    end
+
+    context 'with many jobs' do
+      it "calls the job_arrhythmia_handler when the heartbeat dies and correctly sets the statuses of the batch jobs" do
+        def loop_process
+          loop do
+            if Resque.size(:batch) > 0
+              process_job(:batch)
+            else
+              sleep(0.1)
+            end
+          end
+        end
+
+        begin
+          t = Thread.new do
+            loop_process
+          end
+
+          batch = Resque::Plugins::Batch.new(message_handler: message_handler)
+
+          # Queue one long job (this will be interrupted) and a few short jobs
+          batch.enqueue(LongJob)
+          batch.enqueue(Job, 1)
+          batch.enqueue(Job, 2)
+          batch.enqueue(Job, 3)
+
+          message_handler.job_begin_handler = ->(_batch_instance, job_id) do
+            if job_id == 0
+              t.exit
+
+              # Kill processing, then start a new thread to process the rest
+              t = Thread.new { loop_process }
+            end
+          end
+
+          message_handler.job_arrhythmia_handler = ->(batch_instance, job_id) do
+            if job_id == 0
+              expect(batch_instance.batch_jobs[0].status).to eq("unknown")
+
+            else
+              raise "SPEC FAILURE"
+            end
+          end
+
+          allow(message_handler.job_arrhythmia_handler).to receive(:call).and_call_original
+
+          result = batch.perform
+
+          expect(result).to be_falsey
+
+          expect(batch.batch_jobs[0].status).to eq("unknown")
+          expect(batch.batch_jobs[0].klass).to eq(LongJob)
+          expect(batch.batch_jobs[0].args).to eq([])
+          expect(batch.batch_jobs[0].result).to be_nil
+          expect(batch.batch_jobs[0].exception).to be_nil
+          expect(batch.batch_jobs[0].duration).to be > 0
+
+          aggregate_failures do
+            (1..3).each do |job_id|
+              job = batch.batch_jobs[job_id]
+              aggregate_failures "job #{job_id}" do
+                expect(job.status).to eq 'success'
+                expect(job.klass).to eq Job
+                expect(job.args).to eq [job_id]
+                expect(job.result).to eq 'test-success'
+                expect(job.exception).to be_nil
+                expect(job.duration).to be > 0
+              end
+            end
+          end
+
+          expect(message_handler.job_arrhythmia_handler).to have_received(:call)
+        ensure
+          t.exit
+        end
       end
     end
   end
