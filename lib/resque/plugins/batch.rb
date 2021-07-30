@@ -136,7 +136,7 @@ module Resque
 
               running_jobs.reject(&:heartbeat_running?).each do |batch_job|
                 decoded_msg = {"job_id" => batch_job.job_id, "msg" => "arrhythmia"}
-                batch_jobs[job_id].process_job_msg(decoded_msg)
+                batch_job.process_job_msg(decoded_msg)
                 message_handler.send_message(self, :job, decoded_msg)
               end
             end
