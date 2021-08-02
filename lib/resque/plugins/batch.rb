@@ -11,7 +11,12 @@ require "resque/plugins/batch/worker_job_info"
 module Resque
   module Plugins
     class Batch
+      # How frequently heartbeat messages should be sent, in seconds.
       JOB_HEARTBEAT = 45
+
+      # How long a heartbeat message should persist, in seconds.
+      # If a heartbeat message times out, the job sending the heartbeat has
+      # an "arrhythmia" event and its worker may have died.
       JOB_HEARTBEAT_TTL = 120
 
       attr_reader :id,
@@ -93,6 +98,9 @@ module Resque
         last_heartbeat_check = Time.now
         last_activity_check = Time.now
 
+        # While any job is still pending or running (heartbeat timeouts are not
+        # considered to be incomplete), periodically check for messages and
+        # for heartbeat timeouts.
         while(batch_jobs.any?(&:incomplete?)) do
           msg = redis.lpop(batch_key)
 
@@ -114,6 +122,9 @@ module Resque
             # A Job takes a long time - send a heartbeat
             # A Job dies - send a heartbeat
 
+            # Note: we check every 45 seconds for heartbeat timeouts, but the
+            # timeout period is 120 seconds.  We'll check 2 or 3 times for
+            # timeouts before finally sending an arrhythmia message
             if Time.now - last_heartbeat_check > JOB_HEARTBEAT
               running_jobs = batch_jobs.select(&:running?)
 

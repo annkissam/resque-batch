@@ -33,6 +33,8 @@ module Resque
         end
 
         def heartbeat!
+          # If the heartbeat key is still present, this will just refresh the
+          # TTL to keep it alive for another 120 seconds
           redis.set(heartbeat_key, "running")
           redis.expire(heartbeat_key, Resque::Plugins::Batch::JOB_HEARTBEAT_TTL)
         end
