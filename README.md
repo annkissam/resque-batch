@@ -20,14 +20,14 @@ And then execute:
 ### Create a Batch Worker
 
 * include 'Resque::Plugins::Batch::Job'
-* the method is perform_job (not perform)
+* the method is perform_work (not perform)
 * You should return `success, message`
 
 ```ruby
 class Archive
   include Resque::Plugins::Batch::Job
 
-  def self.perform_job(repo_id, branch = 'master')
+  def self.perform_work(repo_id, branch = 'master')
     repo = Repository.find(repo_id)
     repo.create_archive(branch)
 
@@ -38,8 +38,8 @@ end
 
 ### Create a Batch (and call perform)
 
-```
-batch = Resque::Plugins::Batch.new()
+```ruby
+batch = Resque::Plugins::Batch.new
 batch.enqueue(Job, 11)
 batch.enqueue(Job, 12, "test2")
 result = batch.perform
@@ -49,7 +49,7 @@ result = batch.perform
 
 You can process results as they arrive w/ a message_handler:
 
-```
+```ruby
 batch.init_handler do |batch_jobs|
   puts "Notify client it's starting"
 end
@@ -71,11 +71,11 @@ result = batch.perform
 
 If you need to send additional notifications there's an 'info' message
 
-```
+```ruby
 class Archive
   include Resque::Plugins::Batch::Job
   
-  def self.perform_job(repo_id, branch = 'master')
+  def self.perform_work(repo_id, branch = 'master')
     ...
       @worker_job_info.info!({your: "DATA"})
     ...

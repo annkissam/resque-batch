@@ -22,22 +22,35 @@ module Resque
           @status = 'pending'
         end
 
+        # Checks if the job is still running
         def running?
           status == 'running'
         end
 
+        # Checks if the job successfully completed processing.
         def success?
           status == 'success'
         end
 
+        # Checks if the job has completed processing, successfully or otherwise.
         def complete?
-          ['success', 'failure', 'exception'].include?(status)
+          %w[success failure exception].include?(status)
         end
 
+        # Checks if the job has not finished processing.
+        # This is similar to #complete?, EXCEPT this also accounts for jobs
+        # that have had timed out heartbeat checks; a job that has had its
+        # heartbeat time out will be neither #complete? nor #incomplete?
         def incomplete?
           !complete? && status != 'unknown'
         end
 
+        # Checks if the job's heartbeat is still live.  If a heartbeat isn't set
+        # again before the timeout period expires (which defaults to 2 minutes -
+        # see Batch::JOB_HEARTBEAT_TTL), then the job will receive an arrhythmia
+        # message and have its status set to 'unknown'.  If all other batch jobs
+        # complete or have arrhythmias before the job sends another heartbeat,
+        # it will be considered dead and batch processing will finish.
         def heartbeat_running?
           redis.get(heartbeat_key) == "running"
         end

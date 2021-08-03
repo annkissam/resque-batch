@@ -11,23 +11,55 @@ require "resque/plugins/batch/worker_job_info"
 module Resque
   module Plugins
     class Batch
+      # How frequently heartbeat messages should be sent, in seconds.
       JOB_HEARTBEAT = 45
+
+      # How long a heartbeat message should persist, in seconds.
+      # If a heartbeat message times out, the job sending the heartbeat has
+      # an "arrhythmia" event and its worker may have died.
       JOB_HEARTBEAT_TTL = 120
 
       attr_reader :id,
-                  :message_handler,
-                  :batch_jobs
+                  :message_handler
 
+      # Gets information for all jobs that have been enqueued in this batch.
+      # Jobs are ordered in the order in which they were enqueued; the first
+      # item in the array is the first job that was enqueued, and the final item
+      # is the most recently enqueued job.
+      #
+      # @return [Array<BatchJobInfo>]
+      attr_reader :batch_jobs
+
+      # Creates a new batch object.
+      #
+      # @param id [String, Integer, NilClass]
+      #   a unique ID to identify this batch.  If unspecified, an ID number will
+      #   be generated automatically.
+      # @param message_handler [Resque::Plugins::Batch::MessageHandler]
+      #   a handler for messages sent to the batch
       def initialize(id: nil, message_handler: Resque::Plugins::Batch::MessageHandler.new)
         @id = id || get_id
         @message_handler = message_handler
         @batch_jobs = []
       end
 
+      # Queues up a batch job to handle batch data.  The job class MUST include
+      # the Resque::Plugins::Batch::Job mixin.
+      #
+      # @param klass [Class]
+      #   the batch job class
+      # @param args [Array]
+      #   the batch data to be processed by the batch job
       def enqueue(klass, *args)
         batch_jobs << Resque::Plugins::Batch::BatchJobInfo.new(id, batch_jobs.count, klass, *args)
       end
 
+      # Performs the batch processing.  This method is BLOCKING and will wait
+      # until all batch jobs have completed before the method exits.
+      #
+      # @return [Boolean]
+      #   true if all batch jobs completed successfully, false if any job
+      #   failed or encountered an error
       def perform
         # Make sure the incoming message queue is clear
         if redis.llen(batch_key) > 0
@@ -66,6 +98,9 @@ module Resque
         last_heartbeat_check = Time.now
         last_activity_check = Time.now
 
+        # While any job is still pending or running (heartbeat timeouts are not
+        # considered to be incomplete), periodically check for messages and
+        # for heartbeat timeouts.
         while(batch_jobs.any?(&:incomplete?)) do
           msg = redis.lpop(batch_key)
 
@@ -87,6 +122,9 @@ module Resque
             # A Job takes a long time - send a heartbeat
             # A Job dies - send a heartbeat
 
+            # Note: we check every 45 seconds for heartbeat timeouts, but the
+            # timeout period is 120 seconds.  We'll check 2 or 3 times for
+            # timeouts before finally sending an arrhythmia message
             if Time.now - last_heartbeat_check > JOB_HEARTBEAT
               running_jobs = batch_jobs.select(&:running?)
 
