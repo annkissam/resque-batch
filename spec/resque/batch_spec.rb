@@ -754,4 +754,76 @@ RSpec.describe Resque::Plugins::Batch do
       expect(Resque::Stat[:failed]).to eq(0)
     end
   end
+
+  context 'when queuing multiple batches on the same queue' do
+    around(:each) do |example|
+      t = Thread.new do
+        loop do
+          if Resque.size(:batch) > 0
+            process_job(:batch)
+          elsif Resque.size(:batch_2) > 0
+            process_job(:batch_2)
+          else
+            sleep(0.1)
+          end
+        end
+      end
+
+      begin
+        example.run
+      ensure
+        t.exit
+      end
+    end
+
+    it 'successfully performs both batches' do
+      batch1 = Resque::Plugins::Batch.new
+      batch2 = Resque::Plugins::Batch.new
+
+      10.times { batch1.enqueue(Job, 12) }
+      10.times { batch2.enqueue(Job, 13) }
+      t1 = Thread.new { batch1.perform }
+      t2 = Thread.new { batch2.perform }
+
+      batch1_status = t1.value
+      batch2_status = t2.value
+
+      aggregate_failures do
+        expect(batch1_status).to eq true
+        expect(batch2_status).to eq true
+      end
+    end
+  end
+
+  context 'when queueing jobs to different queues in the same batch' do
+    around(:each) do |example|
+      t = Thread.new do
+        loop do
+          if Resque.size(:batch) > 0
+            process_job(:batch)
+          elsif Resque.size(:batch_2) > 0
+            process_job(:batch_2)
+          else
+            sleep(0.1)
+          end
+        end
+      end
+
+      begin
+        example.run
+      ensure
+        t.exit
+      end
+    end
+
+    it 'successfully performs the jobs' do
+      batch = Resque::Plugins::Batch.new
+
+      10.times { batch.enqueue(Job, 12) }
+      10.times { batch.enqueue(Batch2QueueJob) }
+      result = batch.perform
+
+      expect(result).to eq true
+    end
+  end
 end
