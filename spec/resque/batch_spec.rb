@@ -63,6 +63,7 @@ RSpec.describe Resque::Plugins::Batch do
     Resque::Stat.clear(:failed)
 
     Resque.remove_queue(:batch)
+    Resque.remove_queue(:batch_2)
 
     # The default
     Resque.inline = false
