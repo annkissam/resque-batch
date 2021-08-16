@@ -101,7 +101,7 @@ module Resque
           expected_queue_jobs.each do |queue_name, expected_jobs|
             currently_queued_jobs =
               redis.lrange("queue:#{queue_name}", 0, -1)
-                   .map(&JSON.method(:load))
+                   .map(&Resque.method(:decode))
 
             unqueued_jobs =
               expected_jobs.reject { |job_hash| currently_queued_jobs.include?(job_hash) }
