@@ -66,12 +66,20 @@ module Resque
           raise "redis list #{batch_key} is not empty"
         end
 
-        result = redis.multi do
+        expected_queue_jobs = {}
+
+        redis.multi do
           batch_jobs.each_with_index do |batch_job, job_id|
             klass = batch_job.klass
             queue = Resque.queue_from_class(klass) || batch_queue
             args = batch_job.args
             args = [id, job_id] + args
+
+            expected_queue_jobs[queue] ||= []
+            expected_queue_jobs[queue] << {
+              'class' => klass.name,
+              'args' => args
+            }
 
             if Resque.inline
               begin
@@ -88,8 +96,19 @@ module Resque
         end
 
         unless Resque.inline
-          unless result.last == job_count
-            raise "not all jobs were queued"
+          # Get all the jobs in each queue, then confirm that the jobs we
+          # just queued up are all present
+          expected_queue_jobs.each do |queue_name, expected_jobs|
+            currently_queued_jobs =
+              redis.lrange("queue:#{queue_name}", 0, -1)
+                   .map(&Resque.method(:decode))
+
+            unqueued_jobs =
+              expected_jobs.reject { |job_hash| currently_queued_jobs.include?(job_hash) }
+
+            if unqueued_jobs.any?
+              raise "#{unqueued_jobs.size} job(s) were unable to be queued to the #{queue_name.inspect} queue"
+            end
           end
         end
 
