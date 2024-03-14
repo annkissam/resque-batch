@@ -91,7 +91,7 @@ jobs:
           command: |
             if [[ "${CIRCLE_NODE_INDEX}" == 0 ]]
             then
-                bundle exec rubocop -lD
+              bundle exec rubocop -lD
             fi
 
 workflows:
